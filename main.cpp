@@ -636,13 +636,13 @@ int main(int argc, char** argv)
 		completion_init(argv[2]);
 		set_completion(argv[2], "help", new const char* []{ }, 0, "print help");
 		set_completion(argv[2], "action", new const char* []{"create-token", "check-token", "copy-token", "list-tokens", "help", "install-completions", "uninstall-completions"}, 7, "action");
-		set_completion(argv[2], "token", new const char* []{"(ls -p /dev/sd?)"}, 1, "/dev/sdX device");
+		set_completion(argv[2], "token", new const char* []{"(ls /dev/sd?)"}, 1, "/dev/sdX device");
 		set_completion(argv[2], "label", new const char* []{ }, 0, "give a label to new token", "--action=create-token");
 		set_completion(argv[2], "randompasswd", new const char* []{ }, 0, "random password generation", "--action=create-token");
 		set_completion(argv[2], "passwd", new const char* []{ }, 0, "password", "--action=create-token");
 		set_completion(argv[2], "passwd-file", new const char* []{"(ls -p | grep -v /)"}, 1, "file with password", "--action=create-token");
-		set_completion(argv[2], "src", new const char* []{"(ls -p /dev/sd?)"}, 1, "source token device", "--action=copy-token");
-		set_completion(argv[2], "dest", new const char* []{"(ls -p /dev/sd?)"}, 1, "destination token device", "--action=copy-token");
+		set_completion(argv[2], "src", new const char* []{"(ls /dev/sd?)"}, 1, "source token device", "--action=copy-token");
+		set_completion(argv[2], "dest", new const char* []{"(ls /dev/sd?)"}, 1, "destination token device", "--action=copy-token");
 	}
 	else if ((action == "uninstall-completions") && argc == 3)
 	{
