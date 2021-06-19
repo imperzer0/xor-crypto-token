@@ -101,22 +101,18 @@ void draw_progress_bar(const std::string& label, double progress)
 
 typedef void (* cleanup_function)(void* args);
 
-inline void promt(std::string file, cleanup_function cleanup_func, void* args = nullptr)
+inline void promt(const std::string& message, cleanup_function cleanup_func, void* args = nullptr)
 {
-	struct stat st;
-	if (!::stat(file.c_str(), &st))
+	std::cout << message << ". Do you agree?(y/N): ";
+	char y_n = std::cin.get();
+	if (y_n == 'Y' || y_n == 'y')
 	{
-		std::cout << "File \"" << file << "\" will be overwritten. Do you agree?(y/N): ";
-		char y_n = std::cin.get();
-		if (y_n == 'Y' || y_n == 'y')
-		{
-			std::cout << "y\nremoving...\n";
-		}
-		else
-		{
-			std::cout << "N\nexiting...\n";
-			cleanup_func(args);
-		}
+		std::cout << "y\n\n";
+	}
+	else
+	{
+		std::cout << "N\n\033[33mexit.\033[0m\n";
+		cleanup_func(args);
 	}
 }
 

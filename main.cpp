@@ -131,23 +131,26 @@ inline static void help(FILE* output_stream, const char* appname)
 	fprintf(
 			output_stream,
 			"Usage:\n"
-			"      %s --action=create-token --token=/dev/sdX              --- Setup /dev/sdX device as token (data will be lost).\n" // 1
-			"      %s--label=<label> (--randompasswd/--passwd=<password>/ --- Password might be of size k*512 characters.\n" // s
-			"      %s--passwd-file=<password-file>)                       --- Program will ask to input password if no argument provided.\n" // s
+			"      %s --action=create-token --token=/dev/sdX             --- Setup /dev/sdX device as token (data will be lost).\n" // 1
+			"      %s--label=<label> (--randompasswd/                    --- Password might be of size k*512 characters.\n" // S
+			"      %s--passwd=<password>/--passwd-file=<password-file>)  --- Program will ask to input password if no argument provided.\n" // S
 			"      or\n"
-			"      %s --action=check-token --token=/dev/sdX               --- Checks if /dev/sdX device is token.\n" // 2
+			"      %s --action=check-token --token=/dev/sdX              --- Checks if /dev/sdX device is token.\n" // 2
 			"      or\n"
-			"      %s --action=list-tokens                                --- List all tokens connected to the system\n" // 3
+			"      %s --action=list-tokens                               --- List all tokens connected to the system\n" // 3
 			"      or\n"
-			"      %s --action=install-completions <program_name>         --- Installs completions (if run from sudo -\n" // 4
-			"      %s                                                     --- for all users, otherwise - only for\n" // s
-			"      %s                                                     --- current user).\n" // s
+			"      %s --action=copy-token --src=/dev/sdX --dest=/dev/sdY --- Copy token keys from source (/dev/sdX)\n"
+			"      %s                                                    --- to destination (/dev/sdY)\n" // 4
 			"      or\n"
-			"      %s --action=uninstall-completions <program_name>       --- Uninstalls completions (if run from sudo -\n" // 5
-			"      %s                                                     --- for all users, otherwise - only for current\n" // s
-			"      %s                                                     --- user).\n", // 11 s
-			// 1        s        s        2        3        4       s         s        5        s        s
-			appname, spacing, spacing, appname, appname, appname, spacing, spacing, appname, spacing, spacing
+			"      %s --action=install-completions <program_name>        --- Installs completions (if run from sudo -\n" // 5
+			"      %s                                                    --- for all users, otherwise - only for\n" // S
+			"      %s                                                    --- current user).\n" // S
+			"      or\n"
+			"      %s --action=uninstall-completions <program_name>      --- Uninstalls completions (if run from sudo -\n" // 6
+			"      %s                                                    --- for all users, otherwise - only for current\n" // S
+			"      %s                                                    --- user).\n", // S
+			// 1        S        S        2        3        4        S        5       S         S        6        S        S
+			appname, spacing, spacing, appname, appname, appname, spacing, appname, spacing, spacing, appname, spacing, spacing
 	);
 	exit(0);
 }
@@ -274,8 +277,7 @@ void copy(const std::string& from, const std::string& to, bool force)
 	{
 		if (force)
 		{
-			std::cout << "\033[31mdeleting\033[1m " << to << "\033[0m\n";
-			::remove(to.c_str());
+			std::cout << "\033[31mfile\033[1m " << to << "\033[0m\033[31m will be overwritten\033[0m.\n";
 		}
 		else
 		{
@@ -314,7 +316,8 @@ bool is_token(const std::string& path)
 	std::string garbage, sector_logical, sector_physical, partition_table, partition1_type, filesystem1_type, partition2_type, filesystem2_type;
 	
 	get_s_in_fmt(
-			out, "%s" + path + ":%s:%s:%s:%s:%s:%s;\n1:%s::%s:%s;\n2:%s::%s:%s;", &garbage, &garbage, &garbage, &sector_logical, &sector_physical, &partition_table,
+			out, "%s" + path + ":%s:%s:%s:%s:%s:%s;\n1:%s::%s:%s;\n2:%s::%s:%s;",
+			&garbage, &garbage, &garbage, &sector_logical, &sector_physical, &partition_table,
 			&garbage, &garbage, &partition1_type, &filesystem1_type, &garbage, &partition2_type, &filesystem2_type
 	);
 	
@@ -329,6 +332,10 @@ bool is_token(const std::string& path)
 	return true;
 }
 
+#define no_such_arg(arg, parsed_args) ((arg) == (parsed_args).end() || (arg)->second.empty())
+
+#define no_such_empty_arg(arg, parsed_args) ((arg) == (parsed_args).end())
+
 int main(int argc, char** argv)
 {
 	setting1();
@@ -342,7 +349,7 @@ int main(int argc, char** argv)
 	auto parsed_args = parse_args(argc, argv);
 	
 	auto pos = parsed_args.find("--action");
-	if (pos == parsed_args.end() || pos->second.empty())
+	if (no_such_arg(pos, parsed_args))
 	{
 		help(stdout, argv[0]);
 	}
@@ -357,7 +364,7 @@ int main(int argc, char** argv)
 		auto label_arg = parsed_args.find("--label");
 		auto passwd_size_arg = parsed_args.find("--passwd-size");
 		
-		if (token_arg == parsed_args.end() || token_arg->second.empty() || label_arg == parsed_args.end() || label_arg->second.empty())
+		if (no_such_arg(token_arg, parsed_args) || no_such_arg(label_arg, parsed_args))
 		{
 			help(stdout, argv[0]);
 		}
@@ -366,7 +373,7 @@ int main(int argc, char** argv)
 		
 		std::string token(token_arg->second), passwd;
 		
-		if ((randompasswd_arg == parsed_args.end() || randompasswd_arg->second.empty()) && (passwd_arg == parsed_args.end() || passwd_arg->second.empty()) && (passwd_file_arg == parsed_args.end() || passwd_file_arg->second.empty()))
+		if ((no_such_empty_arg(randompasswd_arg, parsed_args)) && (no_such_arg(passwd_arg, parsed_args)) && (no_such_arg(passwd_file_arg, parsed_args)))
 		{
 			std::cout << "type password: ";
 			std::string console_input = read_password();
@@ -375,9 +382,19 @@ int main(int argc, char** argv)
 		}
 		
 		// init partitions...
-		::system(("parted -ms " + token + " mktable gpt").c_str());
+		
+		
+		promt(
+				"Writing token to device " + token + " will destroy user data.", [](void*)
+				{
+					default_();
+					exit(-1);
+				}
+		);
+		
+		system("parted -ms " + token + " mktable gpt");
 		size_t password_size;
-		if (passwd_size_arg != parsed_args.end() && !passwd_size_arg->second.empty())
+		if (!no_such_arg(passwd_size_arg, parsed_args))
 		{
 			password_size = std::stoul(passwd_size_arg->second);
 			if (password_size % 512)
@@ -390,7 +407,7 @@ int main(int argc, char** argv)
 			password_size = 1024;
 		}
 		
-		if (passwd_arg != parsed_args.end() && !passwd_arg->second.empty())
+		if (!no_such_arg(passwd_arg, parsed_args))
 		{
 			password_size = passwd_arg->second.size();
 			if (password_size % 512)
@@ -404,7 +421,7 @@ int main(int argc, char** argv)
 				password_size += size;
 			}
 		}
-		else if (passwd_file_arg != parsed_args.end() && !passwd_file_arg->second.empty())
+		else if (!no_such_arg(passwd_file_arg, parsed_args))
 		{
 			struct stat st{ };
 			if (::stat(passwd_file_arg->second.c_str(), &st) < 0)
@@ -425,7 +442,7 @@ int main(int argc, char** argv)
 		
 		std::string& list = ::exec("parted -ms " + token + " print");
 		std::string end, garbage;
-		get_s_in_fmt(list, "BYT;\n" + token + ":%s:%s;\n%s", &end, &garbage, &garbage);
+		get_s_in_fmt(list, "%sBYT;\n" + token + ":%s:%s;\n%s", &garbage, &end, &garbage, &garbage);
 		
 		system("parted -ms " + token + " mkpart primary fat32 " + std::to_string(36 + password_size + eosecond) + "s " + end);
 		
@@ -441,11 +458,11 @@ int main(int argc, char** argv)
 		
 		::fclose(token_name);
 		
-		if (randompasswd_arg != parsed_args.end())
+		if (!no_such_empty_arg(randompasswd_arg, parsed_args))
 		{
 			system("cat /dev/random > " + token + "1");
 		}
-		else if (passwd_arg != parsed_args.end() && !passwd_arg->second.empty())
+		else if (!no_such_arg(passwd_arg, parsed_args))
 		{
 			FILE* passwd_file = ::fopen((token + "1").c_str(), "wb");
 			::fwrite(passwd_arg->second.c_str(), sizeof(char), passwd_arg->second.size(), passwd_file);
@@ -463,7 +480,7 @@ int main(int argc, char** argv)
 				::fclose(device);
 			}
 		}
-		else if (passwd_file_arg != parsed_args.end() && !passwd_file_arg->second.empty())
+		else if (!no_such_arg(passwd_file_arg, parsed_args))
 		{
 			copy(passwd_file_arg->second, token + "1", true);
 			struct stat st{ };
@@ -491,7 +508,7 @@ int main(int argc, char** argv)
 	{
 		auto token_arg = parsed_args.find("--token");
 		
-		if (token_arg == parsed_args.end() || token_arg->second.empty())
+		if (no_such_arg(token_arg, parsed_args))
 		{
 			help(stdout, argv[0]);
 		}
@@ -519,8 +536,58 @@ int main(int argc, char** argv)
 	}
 	else if (action == "copy-token" && argc == 4)
 	{
-		// undefined
-		std::cout << "\033[31munavailable\n\033[0m";
+		auto src_arg = parsed_args.find("--src");
+		auto dest_arg = parsed_args.find("--dest");
+		
+		if (no_such_arg(src_arg, parsed_args) && no_such_arg(dest_arg, parsed_args))
+		{
+			help(stdout, argv[0]);
+		}
+		
+		if (!is_token(src_arg->second))
+		{
+			error("device \033[36m" + src_arg->second + "\033[31m isn't a valid token");
+		}
+		
+		promt(
+				"Copying token to device " + dest_arg->second + " will destroy user data.", [](void*)
+				{
+					default_();
+					exit(-1);
+				}
+		);
+		
+		std::string& params = exec("parted -ms " + src_arg->second + " print");
+		std::string part1_start, part1_end, part2_start, part2_end, part1_size, garbage;
+		get_s_in_fmt(
+				params, "%s;\n1:%s:%s:%s:%s;\n2:%s:%s:%s",
+				&garbage, &part1_start, &part1_end, &part1_size, &garbage, &part2_start, &part2_end, &garbage
+		);
+		
+		system("parted -ms " + dest_arg->second + " mktable gpt");
+		
+		system("parted -ms " + dest_arg->second + " mkpart primary fat32 " + part1_start + " " + part1_end);
+		
+		system("parted -ms " + dest_arg->second + " mkpart primary fat32 " + part2_start + " " + part2_end);
+		
+		std::string& list = ::exec("parted -ms " + dest_arg->second + " print");
+		std::string end;
+		get_s_in_fmt(list, "%sBYT;\n%s:%s:%s;", &garbage, &garbage, &end, &garbage);
+		
+		system("parted -ms " + dest_arg->second + " mkpart primary fat32 " + part2_end + " " + end);
+		
+		system("mkfs.fat -F32 " + dest_arg->second + "3");
+		
+		std::cout << "\033[33mcopying " << part1_size << " from \033[36m" << src_arg->second << "1\033[33m to \033[36m" << dest_arg->second << "1\n\033[0m";
+		copy(src_arg->second + "1", dest_arg->second + "1", true);
+		
+		std::cout << "\033[33mcopying \033[37mlabel\033[33m from \033[36m" << src_arg->second << "2\033[33m to \033[36m" << dest_arg->second << "2\n\033[0m";
+		linefstream label(::fopen((src_arg->second + "2").c_str(), "rb"));
+		std::string& label_str = label.getline();
+		label_str += "\n";
+		FILE* label2 = ::fopen((dest_arg->second + "2").c_str(), "wb");
+		::fwrite(label_str.c_str(), sizeof(char), label_str.size(), label2);
+		::fclose(label2);
 	}
 	else if (action == "list-tokens" && argc == 2)
 	{
@@ -545,17 +612,11 @@ int main(int argc, char** argv)
 					linefstream nameblock(token_name);
 					std::string& name = nameblock.getline();
 					
-					std::string spacer;
-					for (int i = 0; i < name.size(); ++i)
-					{
-						spacer += ' ';
-					}
-					
 					std::string& info = exec("parted -ms " + token + " print");
 					std::string block_size, garbage;
 					get_s_in_fmt(info, "%s;\n1:%s:%s:%s:%s", &garbage, &garbage, &garbage, &block_size, &garbage);
 					
-					std::cout << "\033[32mOK\033[34m token is \033[3mvalid\n\033[0m\033[1m\033[4mName" << spacer << "\b\b\bKey size\n\033[0m";
+					std::cout << "\033[32mOK\033[34m token is \033[3mvalid\n\033[0m";
 					std::cout << "\033[36m" << name << " \033[35m" << block_size << "\n\033[0m";
 					
 					token_list.push_back({token, name, block_size});
@@ -580,6 +641,8 @@ int main(int argc, char** argv)
 		set_completion(argv[2], "randompasswd", new const char* []{ }, 0, "random password generation", "--action=create-token");
 		set_completion(argv[2], "passwd", new const char* []{ }, 0, "password", "--action=create-token");
 		set_completion(argv[2], "passwd-file", new const char* []{"(ls -p | grep -v /)"}, 1, "file with password", "--action=create-token");
+		set_completion(argv[2], "src", new const char* []{"(ls -p /dev/sd?)"}, 1, "source token device", "--action=copy-token");
+		set_completion(argv[2], "dest", new const char* []{"(ls -p /dev/sd?"}, 1, "destination token device", "--action=copy-token");
 	}
 	else if ((action == "uninstall-completions") && argc == 3)
 	{
