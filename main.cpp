@@ -28,7 +28,7 @@ std::string& trim_str_and_convert(const std::string& str, size_t start, size_t c
 	return *result;
 }
 
-void get_s_in_fmt(const std::string& str, const std::string& format, ...)
+bool get_s_in_fmt(const std::string& str, const std::string& format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -50,7 +50,7 @@ void get_s_in_fmt(const std::string& str, const std::string& format, ...)
 	
 	if (pos_prefix_end < 0)
 	{
-		return;
+		return false;
 	}
 	
 	int j = pos_prefix_end;
@@ -92,7 +92,14 @@ void get_s_in_fmt(const std::string& str, const std::string& format, ...)
 		*va_arg(args, std::string*) = trim_str_and_convert(str, j);
 	}
 	
+	if (i < format.size())
+	{
+		return false;
+	}
+	
 	va_end(args);
+	
+	return true;
 }
 
 inline static bool is_dir(const std::string& path)
@@ -489,7 +496,7 @@ int main(int argc, char** argv)
 			help(stdout, argv[0]);
 		}
 		
-		std::cout << "\033[34mchecking device...\n";
+		std::cout << "\033[34mchecking device " << token_arg->second << " ...\n";
 		if (is_token(token_arg->second))
 		{
 			FILE* token_name = ::fopen((token_arg->second + "2").c_str(), "rb");
@@ -512,22 +519,56 @@ int main(int argc, char** argv)
 	}
 	else if (action == "copy-token" && argc == 4)
 	{
+		// undefined
+		std::cout << "\033[31munavailable\n\033[0m";
+	}
+	else if (action == "list-tokens" && argc == 2)
+	{
 		DIR* devices = ::opendir("/dev/");
 		if (devices == nullptr)
 		{
 			error("can't open directory /dev");
 		}
 		dirent* entry;
+		std::vector<std::vector<std::string>> token_list;
 		while ((entry = ::readdir(devices)) != nullptr)
 		{
-			if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..") && is_file_or_block("/dev/" + std::string(entry->d_name)))
+			if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..") && is_file_or_block("/dev/" + std::string(entry->d_name)) &&
+				get_s_in_fmt(entry->d_name, "sd%s") && strlen(entry->d_name) == 3)
 			{
-			
+				std::string token("/dev/");
+				token += entry->d_name;
+				std::cout << "\033[34mchecking device " << token << " ...\n";
+				if (is_token(token))
+				{
+					FILE* token_name = ::fopen((token + "2").c_str(), "rb");
+					linefstream nameblock(token_name);
+					std::string& name = nameblock.getline();
+					
+					std::string spacer;
+					for (int i = 0; i < name.size(); ++i)
+					{
+						spacer += ' ';
+					}
+					
+					std::string& info = exec("parted -ms " + token + " print");
+					std::string block_size, garbage;
+					get_s_in_fmt(info, "%s;\n1:%s:%s:%s:%s", &garbage, &garbage, &garbage, &block_size, &garbage);
+					
+					std::cout << "\033[32mOK\033[34m token is \033[3mvalid\n\033[0m\033[1m\033[4mName" << spacer << "\b\b\bKey size\n\033[0m";
+					std::cout << "\033[36m" << name << " \033[35m" << block_size << "\n\033[0m";
+					
+					token_list.push_back({token, name, block_size});
+				}
 			}
 		}
-	}
-	else if (action == "list-tokens" && argc == 2)
-	{
+		
+		std::cout << "\033[32m\033[3mfound \033[35m" << token_list.size() << " \033[32mtokens.\n\033[0m";
+		
+		for (int i = 0; i < token_list.size(); ++i)
+		{
+			std::cout << "\033[35m" << i + 1 << ".\t\033[36m\033[1m" << token_list[i][0] << "\033[0m\ttoken name: \33[33m\033[3m" << token_list[i][1] << "\033[0m\tsize: \033[35m" << token_list[i][2] << "\n";
+		}
 	}
 	else if (action == "install-completions" && argc == 3)
 	{
