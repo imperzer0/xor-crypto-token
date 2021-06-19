@@ -1,0 +1,23 @@
+pkgname="xor-crypto-token"
+
+post_install()
+{
+	echo -e "\033[36mexecuting: $pkgname --action=uninstall-completions $pkgname ...\033[0m"
+	sudo $pkgname --action=uninstall-completions $pkgname
+	echo -e "\033[36mexecuting: $pkgname --action=install-completions $pkgname ...\033[0m"
+	sudo $pkgname --action=install-completions $pkgname
+}
+
+post_upgrade()
+{
+	echo -e "\033[36mexecuting: $pkgname --action=uninstall-completions $pkgname ...\033[0m"
+	sudo $pkgname --action=uninstall-completions $pkgname
+	echo -e "\033[36mexecuting: $pkgname --action=install-completions $pkgname ...\033[0m"
+	sudo $pkgname --action=install-completions $pkgname
+}
+
+pre_remove()
+{
+	echo -e "\033[36mexecuting: $pkgname --action=uninstall-completions $pkgname ...\033[0m"
+	sudo $pkgname --action=uninstall-completions $pkgname
+}
