@@ -405,33 +405,33 @@ int main(int argc, char** argv)
 		else
 		{
 			password_size = 1024;
-		}
-		
-		if (!no_such_arg(passwd_arg, parsed_args))
-		{
-			password_size = passwd_arg->second.size();
-			if (password_size % 512)
+			
+			if (!no_such_arg(passwd_arg, parsed_args))
 			{
-				size_t size = 512 - password_size % 512;
-				char* random = new char[size];
-				FILE* random_file = ::fopen("/dev/random", "rb");
-				::fread(random, sizeof(char), size, random_file);
-				passwd_arg->second.append(random, size);
-				::fclose(random_file);
-				password_size += size;
+				password_size = passwd_arg->second.size();
+				if (password_size % 512)
+				{
+					size_t size = 512 - password_size % 512;
+					char* random = new char[size];
+					FILE* random_file = ::fopen("/dev/random", "rb");
+					::fread(random, sizeof(char), size, random_file);
+					passwd_arg->second.append(random, size);
+					::fclose(random_file);
+					password_size += size;
+				}
 			}
-		}
-		else if (!no_such_arg(passwd_file_arg, parsed_args))
-		{
-			struct stat st{ };
-			if (::stat(passwd_file_arg->second.c_str(), &st) < 0)
+			else if (!no_such_arg(passwd_file_arg, parsed_args))
 			{
-				error("can't stat file \033[3m" + passwd_file_arg->second);
-			}
-			password_size = st.st_size;
-			if (password_size % 512)
-			{
-				password_size += 512 - password_size % 512;
+				struct stat st{ };
+				if (::stat(passwd_file_arg->second.c_str(), &st) < 0)
+				{
+					error("can't stat file \033[3m" + passwd_file_arg->second);
+				}
+				password_size = st.st_size;
+				if (password_size % 512)
+				{
+					password_size += 512 - password_size % 512;
+				}
 			}
 		}
 		
@@ -641,6 +641,7 @@ int main(int argc, char** argv)
 		set_completion(argv[2], "randompasswd", new const char* []{ }, 0, "random password generation", "--action=create-token");
 		set_completion(argv[2], "passwd", new const char* []{ }, 0, "password", "--action=create-token");
 		set_completion(argv[2], "passwd-file", new const char* []{"(ls -p | grep -v /)"}, 1, "file with password", "--action=create-token");
+		set_completion(argv[2], "passwd-size", new const char* []{ }, 0, "set password size", "--action=create-token");
 		set_completion(argv[2], "src", new const char* []{"(ls /dev/sd?)"}, 1, "source token device", "--action=copy-token");
 		set_completion(argv[2], "dest", new const char* []{"(ls /dev/sd?)"}, 1, "destination token device", "--action=copy-token");
 	}
