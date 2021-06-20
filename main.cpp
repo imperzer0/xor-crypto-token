@@ -6,6 +6,7 @@
 #include <sys/sendfile.h>
 #include "terminal_output.hpp"
 #include "completions.hpp"
+#include "debug_construct.h"
 
 inline static void error(const std::string& message)
 {
@@ -445,7 +446,7 @@ int main(int argc, char** argv)
 		std::string end, garbage;
 		get_s_in_fmt(list, "%sBYT;\n" + token + ":%s:%s;\n%s", &garbage, &end, &garbage, &garbage);
 		
-		system("parted -ms " + token + " mkpart primary fat32 " + std::to_string(36 + password_size + eosecond) + "s " + end);
+		system("parted -ms " + token + " mkpart primary fat32 " + std::to_string(eosecond + 1) + "s " + end);
 		
 		// write values
 		
@@ -461,7 +462,16 @@ int main(int argc, char** argv)
 		
 		if (!no_such_empty_arg(randompasswd_arg, parsed_args))
 		{
-			system("cat /dev/random > " + token + "1");
+			FILE* random = ::fopen("/dev/random", "rb");
+			char random_str[512];
+			FILE* device = ::fopen((token + "1").c_str(), "wb");
+			for (int i = 0; i < password_size / 512; ++i)
+			{
+				::fread(random_str, sizeof(char), 512, random);
+				::fwrite(random_str, sizeof(char), 512, device);
+			}
+			::fclose(random);
+			::fclose(device);
 		}
 		else if (!no_such_arg(passwd_arg, parsed_args))
 		{
@@ -611,10 +621,11 @@ int main(int argc, char** argv)
 		
 		dirent* entry;
 		std::vector<std::vector<std::string>> token_list;
+		std::string garbage;
 		while ((entry = ::readdir(devices)) != nullptr)
 		{
 			if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..") && is_file_or_block("/dev/" + std::string(entry->d_name)) &&
-				get_s_in_fmt(entry->d_name, "sd%s") && strlen(entry->d_name) == 3)
+				get_s_in_fmt(entry->d_name, "sd%s", &garbage) && strlen(entry->d_name) == 3)
 			{
 				std::string token("/dev/");
 				token += entry->d_name;
