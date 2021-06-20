@@ -1,6 +1,6 @@
 pkgname="xor-crypto-token"
 epoch=1
-pkgver=4
+pkgver=5
 pkgrel=1
 pkgdesc="token manager for xor encryptor program"
 arch=("x86_64")

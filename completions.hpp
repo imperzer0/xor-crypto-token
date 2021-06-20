@@ -67,6 +67,15 @@ void set_completion(const char* appname, const char* arg, const char** parameter
 //		}
 		cmd += "'";
 	}
+	else
+	{
+		if (!std::string(display_after).empty())
+		{
+			cmd += " -n '__fish_seen_subcommand_from ";
+			cmd += display_after;
+			cmd += "'";
+		}
+	}
 	cmd += " -f -l ";
 	cmd += arg;
 	if (size)
