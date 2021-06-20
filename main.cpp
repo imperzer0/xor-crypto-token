@@ -6,7 +6,7 @@
 #include <sys/sendfile.h>
 #include "terminal_output.hpp"
 #include "completions.hpp"
-#include "debug_construct.h"
+//#include "debug_construct.h"
 
 inline static void error(const std::string& message)
 {

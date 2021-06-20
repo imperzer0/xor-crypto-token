@@ -1,7 +1,7 @@
 pkgname="xor-crypto-token"
 epoch=1
 pkgver=9
-pkgrel=1
+pkgrel=2
 pkgdesc="token manager for xor encryptor program"
 arch=("x86_64")
 url="https://github.com/imperzer0/xor-crypto-token"
