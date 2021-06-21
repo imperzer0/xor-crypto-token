@@ -6,7 +6,7 @@
 #include <sys/sendfile.h>
 #include "terminal_output.hpp"
 #include "completions.hpp"
-//#include "debug_construct.h"
+#include "debug_construct.h"
 
 inline static void error(const std::string& message)
 {
@@ -31,6 +31,7 @@ std::string& trim_str_and_convert(const std::string& str, size_t start, size_t c
 
 bool get_s_in_fmt(const std::string& str, const std::string& format, ...)
 {
+//	DEBUG(std::cout, "get_s_in_fmt");
 	va_list args;
 	va_start(args, format);
 	
@@ -206,61 +207,6 @@ std::basic_string<_char>& read_password(std::basic_istream<_char>& input_stream 
 	return *console_input;
 }
 
-std::string& read_text()
-{
-	std::cout << "Type text here to encode. Once you've finished type ESC to start process.\n";
-	struct winsize sz;
-	ioctl(stdout->_fileno, TIOCGWINSZ, &sz);
-	size_t size = sz.ws_col;
-	std::cout << '+';
-	for (int i = 1; i < size - 1; ++i)
-	{
-		std::cout << '=';
-	}
-	std::cout << "+\n| ";
-	char c;
-	auto* console_input = new std::string();
-	std::vector<std::string> lines;
-	lines.emplace_back();
-	while (true)
-	{
-		c = std::cin.get();
-		if (c == 0x1b)
-		{
-			std::cout << "\n";
-			break;
-		}
-		else if (c == '\n')
-		{
-			*console_input += c;
-			std::cout << "\n| ";
-			lines.back() += c;
-			lines.emplace_back();
-		}
-		else if (c == '\b' || c == 0x7f)
-		{
-			if (!lines.back().empty())
-			{
-				lines.back().pop_back();
-				std::cout << "\b \b";
-			}
-			else
-			{
-				lines.pop_back();
-				std::cout << "\r  " << RETURN_TO_BEGIN_OF_PREV_LINE << "\033[" << lines.back().size() + 1 << "C";
-			}
-			console_input->pop_back();
-		}
-		else
-		{
-			*console_input += c;
-			lines.back() += c;
-			std::cout << c;
-		}
-	}
-	return *console_input;
-}
-
 void system(const std::string& cmd)
 {
 	system(cmd.c_str());
@@ -314,13 +260,14 @@ void copy(const std::string& from, const std::string& to, bool force)
 
 bool is_token(const std::string& path)
 {
+//	DEBUG(std::cout, "is_token");
 	std::string& out = ::exec("parted -ms " + path + " print");
 	std::string garbage, sector_logical, sector_physical, partition_table, partition1_type, filesystem1_type, partition2_type, filesystem2_type;
 	
 	get_s_in_fmt(
 			out, "%s" + path + ":%s:%s:%s:%s:%s:%s;\n1:%s::%s:%s;\n2:%s::%s:%s;",
 			&garbage, &garbage, &garbage, &sector_logical, &sector_physical, &partition_table,
-			&garbage, &garbage, &partition1_type, &filesystem1_type, &garbage, &partition2_type, &filesystem2_type
+			&garbage, &garbage, &partition1_type, &filesystem1_type, &garbage, &partition2_type, &filesystem2_type, &garbage
 	);
 	
 	test(sector_logical, "512");
@@ -332,6 +279,20 @@ bool is_token(const std::string& path)
 	test(filesystem2_type, "msftdata");
 	
 	return true;
+}
+
+void require_sudo(int argc, char** argv)
+{
+	if (geteuid())
+	{
+		std::cout << "\033[31mPlease run command with \033[1m\033[3mroot\033[0m\033[31m permissions:\n\033[33m\tsudo";
+		for (int i = 0; i < argc; ++i)
+		{
+			std::cout << " " << argv[i];
+		}
+		std::cout << "\n\033[0m";
+		exit(-2);
+	}
 }
 
 #define no_such_arg(arg, parsed_args) ((arg) == (parsed_args).end() || (arg)->second.empty())
@@ -359,6 +320,8 @@ int main(int argc, char** argv)
 	
 	if (action == "create-token" && argc >= 4 && argc <= 8)
 	{
+		require_sudo(argc, argv);
+		
 		auto token_arg = parsed_args.find("--token");
 		auto randompasswd_arg = parsed_args.find("--randompasswd");
 		auto passwd_arg = parsed_args.find("--passwd");
@@ -517,6 +480,8 @@ int main(int argc, char** argv)
 	}
 	else if (action == "check-token" && argc == 3)
 	{
+		require_sudo(argc, argv);
+		
 		auto token_arg = parsed_args.find("--token");
 		
 		if (no_such_arg(token_arg, parsed_args))
@@ -547,6 +512,8 @@ int main(int argc, char** argv)
 	}
 	else if (action == "copy-token" && argc == 4)
 	{
+		require_sudo(argc, argv);
+		
 		auto src_arg = parsed_args.find("--src");
 		auto dest_arg = parsed_args.find("--dest");
 		
@@ -602,21 +569,12 @@ int main(int argc, char** argv)
 	}
 	else if (action == "list-tokens" && argc == 2)
 	{
+		require_sudo(argc, argv);
+		
 		DIR* devices = ::opendir("/dev/");
 		if (devices == nullptr)
 		{
 			error("can't open directory /dev");
-		}
-		
-		if (geteuid())
-		{
-			std::cout << "\033[31mPlease run command with \033[1m\033[3mroot\033[0m\033[31m permissions:\n\033[33m\tsudo";
-			for (int i = 0; i < argc; ++i)
-			{
-				 std::cout << " " << argv[i];
-			}
-			std::cout << "\n\033[0m";
-			exit(-2);
 		}
 		
 		dirent* entry;
@@ -632,18 +590,48 @@ int main(int argc, char** argv)
 				std::cout << "\033[34mchecking device " << token << " ...\n";
 				if (is_token(token))
 				{
+					std::string& info = exec("parted -ms " + token + " print");
+					std::string part1_size, part2_size;
+					get_s_in_fmt(
+							info, "%s;\n1:%s:%s:%s:%s;\n2:%s:%s:%s:%s", &garbage, &garbage, &garbage, &part1_size, &garbage,
+							&garbage, &garbage, &part2_size, &garbage
+					);
+					
+					size_t size;
+					if (std::tolower(part2_size.back()) == 'b')
+					{
+						if (std::tolower(part2_size[part2_size.size() - 2]) == 'k')
+						{
+							size = std::stoul(part2_size.substr(0, part2_size.size() - 2)) * 1024;
+						}
+						else if ('0' <= part2_size[part2_size.size() - 2] && part2_size[part2_size.size() - 2] <= '9')
+						{
+							size = std::stoul(part2_size.substr(0, part2_size.size() - 1));
+						}
+						else
+						{
+							continue;
+						}
+					}
+					else
+					{
+						std::cout << "\033[31mcan't parse partition size\033[0m\n";
+						continue;
+					}
+					
+					if (size > 4096)
+					{
+						continue;
+					}
+					
 					FILE* token_name = ::fopen((token + "2").c_str(), "rb");
 					linefstream nameblock(token_name);
 					std::string& name = nameblock.getline();
 					
-					std::string& info = exec("parted -ms " + token + " print");
-					std::string block_size, garbage;
-					get_s_in_fmt(info, "%s;\n1:%s:%s:%s:%s", &garbage, &garbage, &garbage, &block_size, &garbage);
-					
 					std::cout << "\033[32mOK\033[34m token is \033[3mvalid\n\033[0m";
-					std::cout << "\033[36m" << name << " \033[35m" << block_size << "\n\033[0m";
+					std::cout << "\033[36m" << name << " \033[35m" << part1_size << "\n\033[0m";
 					
-					token_list.push_back({token, name, block_size});
+					token_list.push_back({token, name, part1_size});
 				}
 			}
 		}
