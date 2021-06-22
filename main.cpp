@@ -352,7 +352,7 @@ int main(int argc, char** argv)
 		
 		
 		promt(
-				"Writing token to device " + token + " will destroy user data.", [](void*)
+				"Writing token to device " + token + " will destroy user data", [](void*)
 				{
 					default_();
 					exit(-1);
@@ -530,7 +530,7 @@ int main(int argc, char** argv)
 		}
 		
 		promt(
-				"Copying token to device " + dest_arg->second + " will destroy user data.", [](void*)
+				"Copying token to device " + dest_arg->second + " will destroy user data", [](void*)
 				{
 					default_();
 					exit(-1);
