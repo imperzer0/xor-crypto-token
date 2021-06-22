@@ -16,8 +16,10 @@ inline static void error(const std::string& message)
 
 std::string& trim_str_and_convert(const std::string& str, size_t start, size_t count = std::string::npos)
 {
+//	DEBUG(std::cout, "trim_str_and_convert");
+//	print_debug_info(str);
 	auto* result = new std::string;
-	for (int i = 0; i < count && i < str.size(); ++i)
+	for (int i = 0; i < count && i + start < str.size(); ++i)
 	{
 		if (str[i + start] == '%' == str[i + start + 1])
 		{
