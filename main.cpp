@@ -671,6 +671,7 @@ int main(int argc, char** argv)
 	{
 		std::string str("complete -c ");
 		str += argv[2];
+		str += " ";
 		completion_remove_all_lines_with(str);
 	}
 	else
