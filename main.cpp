@@ -5,105 +5,15 @@
 #include <fcntl.h>
 #include <sys/sendfile.h>
 #include "terminal_output.hpp"
-#include "completions.hpp"
+#include <fish-completions>
+#include <parse-arguments>
+#include <cstr-functions>
 #include "debug_construct.h"
 
 inline static void error(const std::string& message)
 {
 	std::cerr << "\033[31m\033[1merror\033[0m : \033[31m\033[3m" << message << "\n";
 	throw std::runtime_error(message);
-}
-
-std::string& trim_str_and_convert(const std::string& str, size_t start, size_t count = std::string::npos)
-{
-//	DEBUG(std::cout, "trim_str_and_convert");
-//	print_debug_info(str);
-	auto* result = new std::string;
-	for (int i = 0; i < count && i + start < str.size(); ++i)
-	{
-		if (str[i + start] == '%' == str[i + start + 1])
-		{
-			++i;
-			++count;
-		}
-		*result += str[i + start];
-	}
-	return *result;
-}
-
-bool get_s_in_fmt(const std::string& str, const std::string& format, ...)
-{
-//	DEBUG(std::cout, "get_s_in_fmt");
-	va_list args;
-	va_start(args, format);
-	
-	auto* result = new std::string;
-	int pos_prefix_end = -1;
-	for (int i = 0; i < format.size() && i < str.size(); ++i)
-	{
-		if (format[i] == '%' && format[i + 1] == 's')
-		{
-			pos_prefix_end = i;
-			break;
-		}
-		else if (str[i] != format[i])
-		{
-			break;
-		}
-	}
-	
-	if (pos_prefix_end < 0)
-	{
-		return false;
-	}
-	
-	int j = pos_prefix_end;
-	int i = pos_prefix_end + 2, pos_s = j;
-	int delta = 0, delta2 = 0;
-	for (; j < str.size() && i < format.size();)
-	{
-		bool is_eq = true;
-		for (int k = i, l = j;; ++k, ++l)
-		{
-			if ((format.size() - k >= 2 && format[k] == '%' && format[k + 1] == 's') || k >= format.size())
-			{
-				delta2 += k - i;
-				j = l;
-				break;
-			}
-			else if (str[l] != format[k])
-			{
-				is_eq = false;
-				break;
-			}
-		}
-		if (is_eq)
-		{
-			*va_arg(args, std::string*) = trim_str_and_convert(str, pos_s, delta);
-			i += delta2 + 2;
-			delta = 0;
-			delta2 = 0;
-			pos_s = j;
-		}
-		else
-		{
-			++delta;
-			++j;
-		}
-	}
-	if (format[i - 2] == '%' && format[i - 1] == 's')
-	{
-		*va_arg(args, std::string*) = trim_str_and_convert(str, j);
-	}
-	
-	if (i < format.size())
-	{
-		return false;
-	}
-	
-	va_end(args);
-	
-	return true;
 }
 
 inline static bool is_dir(const std::string& path)
@@ -126,7 +36,7 @@ inline static void help(FILE* output_stream, const char* appname)
 	
 	char* spacing = new char[len + 1];
 	
-	for (int i = 0; i < len; ++i)
+	for (int i   = 0; i < len; ++i)
 	{
 		spacing[i] = ' ';
 	}
@@ -158,25 +68,6 @@ inline static void help(FILE* output_stream, const char* appname)
 			appname, spacing, spacing, spacing, appname, appname, appname, spacing, appname, spacing, spacing, appname, spacing, spacing
 	);
 	exit(0);
-}
-
-std::map<std::string, std::string>& parse_args(int argc, char** const& argv)
-{
-	auto result = new std::map<std::string, std::string>();
-	for (int i = 1; i < argc; ++i)
-	{
-		std::string arg(argv[i]);
-		std::string::size_type pos = arg.find('=');
-		if (pos != std::string::npos)
-		{
-			result->insert({arg.substr(0, pos), arg.substr(++pos, arg.size() - pos)});
-		}
-		else
-		{
-			result->insert({arg, ""});
-		}
-	}
-	return *result;
 }
 
 template <typename _char = char>
@@ -283,7 +174,7 @@ bool is_token(const std::string& path)
 	return true;
 }
 
-void require_sudo(int argc, char** argv)
+void require_sudo(int argc, const char** argv)
 {
 	if (geteuid())
 	{
@@ -297,11 +188,20 @@ void require_sudo(int argc, char** argv)
 	}
 }
 
-#define no_such_arg(arg, parsed_args) ((arg) == (parsed_args).end() || (arg)->second.empty())
+namespace anm
+{
+	static constexpr const char* action       = "--action";
+	static constexpr const char* token        = "--token";
+	static constexpr const char* randompasswd = "--randompasswd";
+	static constexpr const char* passwd       = "--passwd";
+	static constexpr const char* passwd_file  = "--passwd-file";
+	static constexpr const char* label        = "--label";
+	static constexpr const char* passwd_size  = "--passwd-size";
+	static constexpr const char* src          = "--src";
+	static constexpr const char* dest         = "--dest";
+}
 
-#define no_such_empty_arg(arg, parsed_args) ((arg) == (parsed_args).end())
-
-int main(int argc, char** argv)
+int main(int argc, const char** argv)
 {
 	setting1();
 	setting2();
@@ -311,42 +211,33 @@ int main(int argc, char** argv)
 		help(stdout, argv[0]);
 	}
 	
-	auto parsed_args = parse_args(argc, argv);
+	arguments args(argc, argv);
 	
-	auto pos = parsed_args.find("--action");
-	if (no_such_arg(pos, parsed_args))
+	if (!args.exists_with_value(anm::action))
 	{
 		help(stdout, argv[0]);
 	}
-	std::string action = pos->second;
+	std::string action = args.get_arg_value(anm::action);
 	
 	if (action == "create-token" && argc >= 4 && argc <= 8)
 	{
 		require_sudo(argc, argv);
 		
-		auto token_arg = parsed_args.find("--token");
-		auto randompasswd_arg = parsed_args.find("--randompasswd");
-		auto passwd_arg = parsed_args.find("--passwd");
-		auto passwd_file_arg = parsed_args.find("--passwd-file");
-		auto label_arg = parsed_args.find("--label");
-		auto passwd_size_arg = parsed_args.find("--passwd-size");
-		
-		if (no_such_arg(token_arg, parsed_args) || no_such_arg(label_arg, parsed_args))
+		if (!args.exists_with_value(anm::token) || !args.exists_with_value(anm::label))
 		{
 			help(stdout, argv[0]);
 		}
 		
-		label_arg->second += "\n";
+		std::string token(args.get_arg_value(anm::token)), label(args.get_arg_value(anm::label)), passwd;
+		label += "\n";
 		
-		std::string token(token_arg->second), passwd;
-		
-		if ((no_such_empty_arg(randompasswd_arg, parsed_args)) && (no_such_arg(passwd_arg, parsed_args)) && (no_such_arg(passwd_file_arg, parsed_args)))
+		if (!args.exists(anm::randompasswd) && !args.exists_with_value(anm::passwd) && !args.exists_with_value(anm::passwd_file))
 		{
 			std::cout << "type password: ";
-			std::string console_input = read_password();
-			parsed_args["--passwd"] = console_input;
-			passwd_arg = parsed_args.find("--passwd");
+			passwd = read_password();
 		}
+		
+		std::string passwd_arg(args.get_arg_value(anm::passwd));
 		
 		// init partitions...
 		
@@ -361,9 +252,9 @@ int main(int argc, char** argv)
 		
 		system("parted -ms " + token + " mktable gpt");
 		size_t password_size;
-		if (!no_such_arg(passwd_size_arg, parsed_args))
+		if (args.exists_with_value(anm::passwd_size))
 		{
-			password_size = std::stoul(passwd_size_arg->second);
+			password_size = std::stoul(args.get_arg_value(anm::passwd_size));
 			if (password_size % 512)
 			{
 				password_size += 512 - password_size % 512;
@@ -373,26 +264,27 @@ int main(int argc, char** argv)
 		{
 			password_size = 1024;
 			
-			if (!no_such_arg(passwd_arg, parsed_args))
+			if (args.exists_with_value(anm::passwd))
 			{
-				password_size = passwd_arg->second.size();
+				password_size = passwd_arg.size();
 				if (password_size % 512)
 				{
 					size_t size = 512 - password_size % 512;
-					char* random = new char[size];
+					char* random      = new char[size];
 					FILE* random_file = ::fopen("/dev/random", "rb");
 					::fread(random, sizeof(char), size, random_file);
-					passwd_arg->second.append(random, size);
 					::fclose(random_file);
+					passwd_arg.append(random, size);
 					password_size += size;
 				}
 			}
-			else if (!no_such_arg(passwd_file_arg, parsed_args))
+			else if (args.exists_with_value(anm::passwd_file))
 			{
+				std::string passwd_file(args.get_arg_value(anm::passwd_file));
 				struct stat st{ };
-				if (::stat(passwd_file_arg->second.c_str(), &st) < 0)
+				if (::stat(passwd_file.c_str(), &st) < 0)
 				{
-					error("can't stat file \033[3m" + passwd_file_arg->second);
+					error("can't stat file \033[3m" + passwd_file + "\033[0m");
 				}
 				password_size = st.st_size;
 				if (password_size % 512)
@@ -404,7 +296,7 @@ int main(int argc, char** argv)
 		
 		system("parted -ms " + token + " mkpart primary fat32 34s " + std::to_string(34 + password_size / 512) + "s");
 		
-		size_t eosecond = 35 + password_size + label_arg->second.size() / 512 + (size_t)(bool)(label_arg->second.size() % 512);
+		size_t eosecond = 35 + password_size + label.size() / 512 + (size_t)(bool)(label.size() % 512);
 		system("parted -ms " + token + " mkpart primary fat32 " + std::to_string(35 + password_size) + "s " + std::to_string(eosecond) + "s");
 		
 		std::string& list = ::exec("parted -ms " + token + " print");
@@ -421,11 +313,11 @@ int main(int argc, char** argv)
 			error("can't open file \033[1m" + token + "2\033[0m : \033[31m\033[3m" + strerror(errno));
 		}
 		
-		::fwrite(label_arg->second.c_str(), sizeof(char), label_arg->second.size(), token_name);
+		::fwrite(label.c_str(), sizeof(char), label.size(), token_name);
 		
 		::fclose(token_name);
 		
-		if (!no_such_empty_arg(randompasswd_arg, parsed_args))
+		if (args.exists(anm::randompasswd))
 		{
 			FILE* random = ::fopen("/dev/random", "rb");
 			char random_str[512];
@@ -438,15 +330,16 @@ int main(int argc, char** argv)
 			::fclose(random);
 			::fclose(device);
 		}
-		else if (!no_such_arg(passwd_arg, parsed_args))
+		else if (args.exists_with_value(anm::passwd))
 		{
 			FILE* passwd_file = ::fopen((token + "1").c_str(), "wb");
-			::fwrite(passwd_arg->second.c_str(), sizeof(char), passwd_arg->second.size(), passwd_file);
+			passwd = args.get_arg_value(anm::passwd);
+			::fwrite(passwd.c_str(), sizeof(char), passwd.size(), passwd_file);
 			::fclose(passwd_file);
 			if (password_size % 512)
 			{
 				size_t remains = 512 - password_size % 512;
-				FILE* random = ::fopen("/dev/random", "rb");
+				FILE* random     = ::fopen("/dev/random", "rb");
 				char* random_str = new char[remains];
 				::fread(random_str, sizeof(char), remains, random);
 				::fclose(random);
@@ -456,19 +349,20 @@ int main(int argc, char** argv)
 				::fclose(device);
 			}
 		}
-		else if (!no_such_arg(passwd_file_arg, parsed_args))
+		else if (args.exists_with_value(anm::passwd_file))
 		{
-			copy(passwd_file_arg->second, token + "1", true);
+			std::string passwd_file(args.get_arg_value(anm::passwd_file));
+			copy(passwd_file, token + "1", true);
 			struct stat st{ };
-			if (::stat(passwd_file_arg->second.c_str(), &st) < 0)
+			if (::stat(passwd_file.c_str(), &st) < 0)
 			{
-				error("can't stat file \033[3m" + passwd_file_arg->second);
+				error("can't stat file \033[3m" + passwd_file);
 			}
 			password_size = st.st_size;
 			if (password_size % 512)
 			{
 				size_t remains = 512 - password_size % 512;
-				FILE* random = ::fopen("/dev/random", "rb");
+				FILE* random     = ::fopen("/dev/random", "rb");
 				char* random_str = new char[remains];
 				::fread(random_str, sizeof(char), remains, random);
 				::fclose(random);
@@ -484,27 +378,28 @@ int main(int argc, char** argv)
 	{
 		require_sudo(argc, argv);
 		
-		auto token_arg = parsed_args.find("--token");
 		
-		if (no_such_arg(token_arg, parsed_args))
+		if (!args.exists_with_value(anm::token))
 		{
 			help(stdout, argv[0]);
 		}
 		
-		std::cout << "\033[34mchecking device " << token_arg->second << " ...\n";
-		if (is_token(token_arg->second))
+		std::string token = args.get_arg_value(anm::token);
+		
+		std::cout << "\033[34mchecking device " << token << " ...\n";
+		if (is_token(token))
 		{
-			FILE* token_name = ::fopen((token_arg->second + "2").c_str(), "rb");
+			FILE* token_name = ::fopen((token + "2").c_str(), "rb");
 			linefstream nameblock(token_name);
 			std::string& name = nameblock.getline();
 			
 			std::string spacer;
-			for (int i = 0; i < name.size(); ++i)
+			for (int    i     = 0; i < name.size(); ++i)
 			{
 				spacer += ' ';
 			}
 			
-			std::string& info = exec("parted -ms " + token_arg->second + " print");
+			std::string& info = exec("parted -ms " + token + " print");
 			std::string block_size, garbage;
 			get_s_in_fmt(info, "%s;\n1:%s:%s:%s:%s", &garbage, &garbage, &garbage, &block_size, &garbage);
 			
@@ -516,56 +411,57 @@ int main(int argc, char** argv)
 	{
 		require_sudo(argc, argv);
 		
-		auto src_arg = parsed_args.find("--src");
-		auto dest_arg = parsed_args.find("--dest");
-		
-		if (no_such_arg(src_arg, parsed_args) && no_such_arg(dest_arg, parsed_args))
+		if (!args.exists_with_value(anm::src) && !args.exists_with_value(anm::dest))
 		{
 			help(stdout, argv[0]);
 		}
 		
-		if (!is_token(src_arg->second))
+		std::string src = args.get_arg_value(anm::src), dest = args.get_arg_value(anm::dest);
+		
+		if (!is_token(src))
 		{
-			error("device \033[36m" + src_arg->second + "\033[31m isn't a valid token");
+			error("device \033[36m" + src + "\033[31m isn't a valid token");
 		}
 		
 		promt(
-				"Copying token to device " + dest_arg->second + " will destroy user data", [](void*)
+				"Copying token to device " + dest + " will destroy user data", [](void*)
 				{
 					default_();
 					exit(-1);
 				}
 		);
 		
-		std::string& params = exec("parted -ms " + src_arg->second + " print");
+		std::string& params = exec("parted -ms " + src + " print");
 		std::string part1_start, part1_end, part2_start, part2_end, part1_size, garbage;
 		get_s_in_fmt(
 				params, "%s;\n1:%s:%s:%s:%s;\n2:%s:%s:%s",
 				&garbage, &part1_start, &part1_end, &part1_size, &garbage, &part2_start, &part2_end, &garbage
 		);
 		
-		system("parted -ms " + dest_arg->second + " mktable gpt");
+		system("parted -ms " + dest + " mktable gpt");
 		
-		system("parted -ms " + dest_arg->second + " mkpart primary fat32 " + part1_start + " " + part1_end);
+		system("parted -ms " + dest + " mkpart primary fat32 " + part1_start + " " + part1_end);
 		
-		system("parted -ms " + dest_arg->second + " mkpart primary fat32 " + part2_start + " " + part2_end);
+		system("parted -ms " + dest + " mkpart primary fat32 " + part2_start + " " + part2_end);
 		
-		std::string& list = ::exec("parted -ms " + dest_arg->second + " print");
+		std::string& list = ::exec("parted -ms " + dest + " print");
 		std::string end;
 		get_s_in_fmt(list, "%sBYT;\n%s:%s:%s;", &garbage, &garbage, &end, &garbage);
 		
-		system("parted -ms " + dest_arg->second + " mkpart primary fat32 " + part2_end + " " + end);
+		system("parted -ms " + dest + " mkpart primary fat32 " + part2_end + " " + end);
 		
-		system("mkfs.fat -F32 " + dest_arg->second + "3");
+		system("mkfs.fat -F32 " + dest + "3");
 		
-		std::cout << "\033[33mcopying " << part1_size << " from \033[36m" << src_arg->second << "1\033[33m to \033[36m" << dest_arg->second << "1\n\033[0m";
-		copy(src_arg->second + "1", dest_arg->second + "1", true);
+		std::cout << "\033[33mcopying " << part1_size << " from \033[36m" << src << "1\033[33m to \033[36m" << dest
+				  << "1\n\033[0m";
+		copy(src + "1", dest + "1", true);
 		
-		std::cout << "\033[33mcopying \033[37mlabel\033[33m from \033[36m" << src_arg->second << "2\033[33m to \033[36m" << dest_arg->second << "2\n\033[0m";
-		linefstream label(::fopen((src_arg->second + "2").c_str(), "rb"));
+		std::cout << "\033[33mcopying \033[37mlabel\033[33m from \033[36m" << src << "2\033[33m to \033[36m" << dest
+				  << "2\n\033[0m";
+		linefstream label(::fopen((src + "2").c_str(), "rb"));
 		std::string& label_str = label.getline();
 		label_str += "\n";
-		FILE* label2 = ::fopen((dest_arg->second + "2").c_str(), "wb");
+		FILE* label2 = ::fopen((dest + "2").c_str(), "wb");
 		::fwrite(label_str.c_str(), sizeof(char), label_str.size(), label2);
 		::fclose(label2);
 	}
@@ -581,7 +477,7 @@ int main(int argc, char** argv)
 		
 		dirent* entry;
 		std::vector<std::vector<std::string>> token_list;
-		std::string garbage;
+		std::string                           garbage;
 		while ((entry = ::readdir(devices)) != nullptr)
 		{
 			if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..") && is_file_or_block("/dev/" + std::string(entry->d_name)) &&
@@ -642,37 +538,54 @@ int main(int argc, char** argv)
 		
 		for (int i = 0; i < token_list.size(); ++i)
 		{
-			std::cout << "\033[35m" << i + 1 << ".\t\033[36m\033[1m" << token_list[i][0] << "\033[0m\ttoken name: \33[33m\033[3m" << token_list[i][1] << "\033[0m\tsize: \033[35m" << token_list[i][2] << "\n";
+			std::cout << "\033[35m" << i + 1 << ".\t\033[36m\033[1m" << token_list[i][0] << "\033[0m\ttoken name: \33[33m\033[3m" << token_list[i][1]
+					  << "\033[0m\tsize: \033[35m" << token_list[i][2] << "\n";
 		}
 	}
 	else if (action == "install-completions" && argc == 3)
 	{
-		completion_init(argv[2]);
-		set_completion(argv[2], "help", nullptr, 0, "print help");
-		set_completion(
-				argv[2], "action", new const char* []{"create-token",
-													  "check-token",
-													  "copy-token",
-													  "list-tokens",
-													  "help",
-													  "install-completions",
-													  "uninstall-completions"}, 7, "action"
+		completions comp(argv[2]);
+		comp.init();
+		comp.set("help", nullptr, "print help");
+		comp.set(
+				anm::action, new const char* []{
+						"create-token",
+						"check-token",
+						"copy-token",
+						"list-tokens",
+						"help",
+						"install-completions",
+						"uninstall-completions"
+				}, "action"
 		);
-		set_completion(argv[2], "token", new const char* []{"(ls /dev/sd?)"}, 1, "/dev/sdX device");
-		set_completion(argv[2], "label", nullptr, 0, "give a label to new token", "--action=create-token");
-		set_completion(argv[2], "randompasswd", nullptr, 0, "random password generation", "--action=create-token");
-		set_completion(argv[2], "passwd-size", nullptr, 0, "password size", "--action=create-token");
-		set_completion(argv[2], "passwd", nullptr, 0, "password", "--action=create-token");
-		set_completion(argv[2], "passwd-file", new const char* []{"(ls -p | grep -v /)"}, 1, "file with password", "--action=create-token");
-		set_completion(argv[2], "src", new const char* []{"(ls /dev/sd?)"}, 1, "source token device", "--action=copy-token");
-		set_completion(argv[2], "dest", new const char* []{"(ls /dev/sd?)"}, 1, "destination token device", "--action=copy-token");
+		comp.set(anm::token, new const char* []{"(ls /dev/sd?)", nullptr}, "/dev/sdX device");
+		comp.set(
+				anm::label, nullptr, "give a label to new token",
+				new const char* []{"--action=create-token", nullptr}
+		);
+		comp.set(
+				anm::randompasswd, nullptr, "random password generation",
+				new const char* []{"--action=create-token", nullptr}
+		);
+		comp.set(anm::passwd_size, nullptr, "password size", new const char* []{"--action=create-token", nullptr});
+		comp.set(anm::passwd, nullptr, "password", new const char* []{"--action=create-token", nullptr});
+		comp.set(
+				anm::passwd_file, new const char* []{"(ls -p | grep -v /)"}, "file with password",
+				new const char* []{"--action=create-token", nullptr}
+		);
+		comp.set(
+				anm::src, new const char* []{"(ls /dev/sd?)", nullptr}, "source token device",
+				new const char* []{"--action=copy-token", nullptr}
+		);
+		comp.set(
+				anm::dest, new const char* []{"(ls /dev/sd?)", nullptr}, "destination token device",
+				new const char* []{"--action=copy-token", nullptr}
+		);
 	}
 	else if ((action == "uninstall-completions") && argc == 3)
 	{
-		std::string str("complete -c ");
-		str += argv[2];
-		str += " ";
-		completion_remove_all_lines_with(str);
+		completions comp(argv[2]);
+		comp.uninstall();
 	}
 	else
 	{
