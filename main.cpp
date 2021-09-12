@@ -105,7 +105,7 @@ void system(const std::string& cmd)
 	system(cmd.c_str());
 }
 
-void copy(const std::string& from, const std::string& to, bool force)
+void copy(const std::string& from, const std::string& to, size_t n_bytes, bool force)
 {
 	int input, output;
 	if ((input = open(from.c_str(), O_RDONLY)) == -1)
@@ -136,7 +136,7 @@ void copy(const std::string& from, const std::string& to, bool force)
 	
 	off_t offset = 0;
 	
-	if (::sendfile(output, input, &offset, st.st_size) == st.st_size)
+	if (::sendfile(output, input, &offset, n_bytes) == n_bytes)
 	{
 		std::cout << "copying file \033[32msuccessful\033[0m.\n";
 	}
@@ -221,7 +221,7 @@ int main(int argc, const char** argv)
 	
 	if (action == "create-token" && argc >= 4 && argc <= 8)
 	{
-		require_sudo(argc, argv);
+//		require_sudo(argc, argv);
 		
 		if (!args.exists_with_value(anm::token) || !args.exists_with_value(anm::label))
 		{
@@ -236,8 +236,10 @@ int main(int argc, const char** argv)
 			std::cout << "type password: ";
 			passwd = read_password();
 		}
-		
-		std::string passwd_arg(args.get_arg_value(anm::passwd));
+		else
+		{
+			passwd = args.get_arg_value(anm::passwd);
+		}
 		
 		// init partitions...
 		
@@ -260,17 +262,7 @@ int main(int argc, const char** argv)
 		{
 			if (args.exists_with_value(anm::passwd))
 			{
-				password_size = passwd_arg.size();
-				if (password_size % 512)
-				{
-					size_t size = 512 - password_size % 512;
-					char* random      = new char[size];
-					FILE* random_file = ::fopen("/dev/random", "rb");
-					::fread(random, sizeof(char), size, random_file);
-					::fclose(random_file);
-					passwd_arg.append(random, size);
-					password_size += size;
-				}
+				password_size = passwd.size();
 			}
 			else if (args.exists_with_value(anm::passwd_file))
 			{
@@ -281,10 +273,6 @@ int main(int argc, const char** argv)
 					error("can't stat file \033[3m" + passwd_file + "\033[0m");
 				}
 				password_size = st.st_size;
-				if (password_size % 512)
-				{
-					password_size += 512 - password_size % 512;
-				}
 			}
 		}
 		
@@ -327,7 +315,6 @@ int main(int argc, const char** argv)
 		else if (args.exists_with_value(anm::passwd))
 		{
 			FILE* passwd_file = ::fopen((token + "1").c_str(), "wb");
-			passwd = args.get_arg_value(anm::passwd);
 			::fwrite(passwd.c_str(), sizeof(char), passwd.size(), passwd_file);
 			::fclose(passwd_file);
 			if (password_size % 512)
@@ -346,13 +333,12 @@ int main(int argc, const char** argv)
 		else if (args.exists_with_value(anm::passwd_file))
 		{
 			std::string passwd_file(args.get_arg_value(anm::passwd_file));
-			copy(passwd_file, token + "1", true);
+			copy(passwd_file, token + "1", password_size, true);
 			struct stat st{ };
 			if (::stat(passwd_file.c_str(), &st) < 0)
 			{
-				error("can't stat file \033[3m" + passwd_file);
+				error("can't stat file \033[3m" + passwd_file + "\033[0m : " + ::strerror(errno));
 			}
-			password_size = st.st_size;
 			if (password_size % 512)
 			{
 				size_t remains = 512 - password_size % 512;
@@ -448,7 +434,14 @@ int main(int argc, const char** argv)
 		
 		std::cout << "\033[33mcopying " << part1_size << " from \033[36m" << src << "1\033[33m to \033[36m" << dest
 				  << "1\n\033[0m";
-		copy(src + "1", dest + "1", true);
+		
+		struct stat st;
+		if (::stat((src + "1").c_str(), &st) < 0)
+		{
+			error("can't stat file " + src + "1 : " + ::strerror(errno));
+		}
+		
+		copy(src + "1", dest + "1", st.st_size, true);
 		
 		std::cout << "\033[33mcopying \033[37mlabel\033[33m from \033[36m" << src << "2\033[33m to \033[36m" << dest
 				  << "2\n\033[0m";
