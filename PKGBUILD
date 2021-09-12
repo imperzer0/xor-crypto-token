@@ -9,7 +9,7 @@ license=('GPL')
 depends=("gcc-libs" "glibc" "parted" "procps-ng")
 makedepends=("cmake>=3.0" "gcc" "parse-arguments>=1:8-1" "fish-completions>=1:8-2")
 source=("local://main.cpp" "local://CMakeLists.txt" "local://terminal_output.hpp" "local://debug_construct.h")
-md5sums=("SKIP" "SKIP" "SKIP" "SKIP" "SKIP")
+md5sums=("SKIP" "SKIP" "SKIP" "SKIP")
 install=xor-crypto-token.install
 
 build()
