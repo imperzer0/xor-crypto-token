@@ -555,7 +555,8 @@ int main(int argc, const char** argv)
 						"list-tokens",
 						"help",
 						"install-completions",
-						"uninstall-completions"
+						"uninstall-completions",
+						nullptr
 				}, "action"
 		);
 		comp.set(anm::token, new const char* []{"(ls /dev/sd?)", nullptr}, "/dev/sdX device");
