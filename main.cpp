@@ -251,19 +251,13 @@ int main(int argc, const char** argv)
 		);
 		
 		system("parted -ms " + token + " mktable gpt");
-		size_t password_size;
+		size_t password_size = 1024;
 		if (args.exists_with_value(anm::passwd_size))
 		{
 			password_size = std::stoul(args.get_arg_value(anm::passwd_size));
-			if (password_size % 512)
-			{
-				password_size += 512 - password_size % 512;
-			}
 		}
 		else
 		{
-			password_size = 1024;
-			
 			if (args.exists_with_value(anm::passwd))
 			{
 				password_size = passwd_arg.size();
